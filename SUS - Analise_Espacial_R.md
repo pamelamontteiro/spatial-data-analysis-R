@@ -427,3 +427,195 @@ prevalencia_hans_ac
     <img src="img/passo16.png" alt="tela inicial">
 </p>
 
+
+Primeiro, vamos unir a tabela de prevalência com os municípios, utilizando como geocódigo a variável com código do IBGE em ambas as tabelas. Execute o código a seguir:
+
+
+``` R
+# Unindo a tabela `prevalencia_hans_ac` com `ac_municipios_5880` 
+# com a função left_join() e salvando no objeto `prevalencia_mun`
+prevalencia_mun <- left_join(
+
+  x = ac_municipios_5880,
+  y = prevalencia_hans_ac,
+  
+  # A ligação é feita pela correspondência entre as colunas
+  #  "cod_mun" e "MUNIRESAT"
+  by = c("cod_mun" = "MUNIRESAT")
+) 
+
+
+```
+
+Em seguida, vamos utilizar a função mf_choro() para visualizar o mapa, definindo os seguintes argumentos:
+
+*   var: coluna com os dados a serem plotados;
+*   breaks: classificação utilizada para divisão das classes;
+*   pal: paleta de cores. Para visualização das paletas disponíveis excute a função hcl.pals() no console;
+*   leg_pos: posição da legenda;
+*   leg_title: o título da legenda;
+*   leg_no_data: texto a ser mostrado sempre que houver município sem dados.
+
+``` R
+# Plotando o objeto prevalencia_mun com uso da função mf_map()
+mf_map(prevalencia_mun) |>
+  
+# Adicionando camada de mapa coroplético com a função mf_choro()  
+mf_choro(
+  
+  # Definindo a variável que será utilizada para a cor de preenchimento
+  var = "prevalencia_2021",
+  
+  # Definindo os intervalos de valores
+  breaks = "quantile",
+  
+  # Definindo a paleta de cores para "viridis"
+  pal = "Viridis",
+  
+  # Definindo a posição da legenda para a região "inferior e à esquerda"
+  leg_pos = "bottomleft1",
+  
+  # Definindo o título da legenda
+  # 
+  leg_title = "Prevalência \nHanseníase \n2021",
+  
+  # Inserindo caixa adicional para a legenda
+  leg_no_data = "Sem dados"
+)
+```
+
+
+<p align="center">
+    <img src="img/passo18.png" alt="tela inicial">
+</p>
+
+# 5.3 Coeficiente de Mortalidade Infantil no município de São Paulo
+
+A taxa de mortalidade infantil representa o número de óbitos ocorridos em crianças menores de um ano de idade por mil nascidos vivos no mesmo período. Este indicador é muito importante por permitir avaliar as condições de vida e de saúde de uma dada população. Com o cálculo da sua taxa, é possível estimar o risco de uma criança morrer antes de chegar a um ano de vida.
+
+O indicador de mortalidade infantil, em especial a mortalidade pós-neonatal, quando elevadas refletem as precárias condições de vida e saúde e valores abaixo do nível de desenvolvimento social e econômico. Já taxas reduzidas podem sinalizar bons indicadores sanitários e sociais, mas também podem encobrir más condições de vida em segmentos sociais específicos.
+
+Vamos começar importando o arquivo {cmi_sp_19_21.csv} com os dados de mortalidade infantil do município de São Paulo entre 2019 e 2021. Este arquivo se encontra no menu lateral “Arquivos” do curso. Note que, no código abaixo, vamos utilizar o argumento locale na função read_csv2() para corrigir a codificação dos caracteres do arquivo para os padrões brasileiros. Replique o código no seu RStudio:
+
+``` R
+#Importando o arquivo{`CID-cmi_sp_19_21.csv`} para o `R`
+cmi_sp_19_21 <- read_csv2("Dados/cmi_sp_19_21.csv",
+                          locale = locale(encoding = "ISO-8859-1"))
+
+
+# Visualizando o objeto
+cmi_sp_19_21
+ 
+```
+<p align="center">
+    <img src="img/3.png" alt="tela inicial">
+</p>
+
+O arquivo importado contém 5 colunas e 98 linhas, com nomes de colunas que incluem espaços, números e uma coluna "Total" desnecessária. Além disso, os coeficientes de mortalidade infantil estão no formato character, o que exige conversão.
+
+O próximo passo envolve a padronização dos nomes das colunas e dos distritos administrativos, removendo acentos e sinais de pontuação. Para facilitar a análise, será realizada uma pivotagem, organizando os dados de mortalidade infantil em uma única coluna, com anos e seus respectivos valores.
+
+Para esses ajustes, serão utilizadas funções dos pacotes <b> janitor, stringr e stringi</b>. O código correspondente deve ser executado para garantir a formatação correta dos dados.
+
+``` R
+# Criando um novo objeto com as correções feitas
+cmi_sp <- cmi_sp_19_21 |> 
+
+  # Padronizando o nome das colunas utilizando a função `clean_names` do
+  # pacote `janitor`
+  clean_names() |> 
+  
+  # Retirando a coluna `total`, pois não será necessária
+  select(-total) |> 
+  
+  # Retirando as linhas que não corresponde a nenhum distrito administrativo,
+  # utilizando a função `filter()` do pacote `dplyr`
+  filter(
+    dist_administrativo_resid != "Endereço não localizado" ,
+    dist_administrativo_resid != "Ignorado"
+  ) |>
+  
+  # Padronizando as colunas de ano para uma coluna só utilizando a função
+  # `pivot_longer()` do pacote `dplyr`. Note que vamos retirar a letra "x",
+  # adicionada pela função `clean_names()`
+  pivot_longer(
+    cols = c(x2019, x2020, x2021),
+    names_to = "ano",
+    values_to = "cmi",
+    names_prefix = "x"
+    ) |> 
+  
+  # Criando as novas colunas corrigidas
+  mutate(
+    
+    # Primeiro criando a coluna que receberá os nomes dos distritos 
+    # administrativos corrigidos (passaremos para maiúsculo utilizando a 
+    # função `str_to_upper()` do pacote `stringr` e retiraremos os acentos
+    # utilizando a função `stri_trans_general()` do pacote `stringi`)
+    ds_nome = str_to_upper(dist_administrativo_resid) |>
+      stri_trans_general("latin-ascii"),
+    
+    # Depois, a coluna que receberá os coeficientes corrigidos, utilizando a 
+    # função `str_replace_all()` do pacote `stringr`, e transformados para 
+    # valores numéricos utilizando a função `as.numeric()`
+    cmi_num = str_replace_all(cmi, "\\,", "\\.") |>
+      str_replace_all("\\-", NA_character_) |>
+      as.numeric()
+  )
+
+
+ # Visualizando as primeiras linhas do objeto `cmi_sp`
+head(cmi_sp)
+  ```
+
+<p align="center">
+    <img src="img/4.png" alt="tela inicial">
+</p>
+
+Agora que as colunas foram corrigidas, o próximo passo é <b> importar o arquivo vetorial dos distritos administrativos de São Paulo </b>. O arquivo {sp_da.gpkg} está disponível para download no menu lateral “Arquivos” do curso.
+
+Para realizar a importação, utilizaremos a função read_sf() do pacote sf, armazenando os dados no objeto {distrito_adm_sp}. <b> Execute o código correspondente no seu RStudio para carregar os dados corretamente </b>.
+
+
+``` R
+# Importando o arquivo{`sp_da.gpkg`} para o `R`
+distrito_adm_sp <- read_sf("Dados/sp_da.gpkg")
+
+# Visualizando o objeto salvo
+distrito_adm_sp
+```
+<p align="center">
+    <img src="img/5.png" alt="tela inicial">
+</p>
+
+
+A variável ds_nome, que contém os nomes dos distritos administrativos, já está <b> padronizada em letra maiúscula e sem acentos,</b> não necessitando de correções adicionais.
+
+Agora, o próximo passo é <b> unir o arquivo vetorial dos distritos administrativos à tabela de coeficiente de mortalidade infantil.</b> A união será feita utilizando a variável ds_nome, presente em ambos os arquivos, como chave de ligação.
+
+``` R
+# Unindo a tabela `distrito_adm_sp` com `cmi_sp` 
+# com a função left_join() e salvando no objeto `cmi_sp_map`
+cmi_sp_map <- left_join(
+
+  x = distrito_adm_sp,
+  y = cmi_sp,
+  
+  # A ligação é feita pela variável `ds_nome`
+  by = "ds_nome"
+)
+```
+
+Vamos criar um <b> mapa coroplético</b> para comparar os coeficientes de mortalidade infantil ao longo dos três anos, destacando os distritos com maiores valores em cores mais intensas e menores valores em cores mais claras.
+
+Antes disso, utilizamos a <b> função hist()</b> para visualizar a distribuição dos valores da variável <b> cmi_num </b>, facilitando a definição de intervalos para a categorização no mapa.
+
+Agora, podemos prosseguir com a criação do mapa temático.
+
+``` R
+hist(x = cmi_sp_map$cmi_num)
+```
+
+<p align="center">
+    <img src="img/6.png" alt="tela inicial">
+</p>
